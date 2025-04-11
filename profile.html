@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile</title>
+     <style>
+        body { font-family: sans-serif; margin: 0; padding: 0; background-color: #f8f9fa; }
+        header { background-color: #343a40; color: white; padding: 1rem; display: flex; justify-content: space-between; align-items: center; }
+        header h1 { margin: 0; font-size: 1.5rem; }
+        nav a, button#logoutButtonProfile { color: #f8f9fa; text-decoration: none; margin-left: 1rem; background: none; border: none; cursor: pointer; font-size: 1rem; }
+        nav a:hover, button#logoutButtonProfile:hover { color: #adb5bd; }
+        main { padding: 2rem; max-width: 600px; margin: 2rem auto; background: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .profile-info p { margin: 0.5rem 0; }
+        .profile-info strong { display: inline-block; width: 100px; }
+        /* Add more styling as needed */
+    </style>
+</head>
+<body>
+     <header>
+        <h1>My App</h1>
+        <nav>
+            <a href="/api/dashboard">Dashboard</a>
+            <button id="logoutButtonProfile">Logout</button>
+        </nav>
+    </header>
+    <main>
+        <h2>User Profile</h2>
+        <div class="profile-info">
+            <p><strong>User ID:</strong> <span id="userId">Loading...</span></p>
+            <p><strong>Email:</strong> <span id="userEmail">Loading...</span></p>
+            <!-- Add more profile fields here as needed -->
+            <!-- Example: <p><strong>Last Login:</strong> <span id="lastLogin">Loading...</span></p> -->
+        </div>
+        <!-- Add options like change password, delete account etc. later -->
+         <p style="margin-top: 2rem; font-size: 0.9em; color: #6c757d;">More profile settings will be available here.</p>
+    </main>
+
+     <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+
+     <script>
+        // IMPORTANT: Replace with your Firebase project's configuration object
+        const firebaseConfig = {
+             apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_AUTH_DOMAIN",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+
+        const userIdSpan = document.getElementById('userId');
+        const userEmailSpan = document.getElementById('userEmail');
+        const logoutButton = document.getElementById('logoutButtonProfile');
+
+        // Authentication Check & Display User Info
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                console.log("User is signed in on profile page:", user.uid);
+                userIdSpan.textContent = user.uid;
+                userEmailSpan.textContent = user.email || 'N/A';
+
+                // Ensure we have a fresh token if needed for future API calls from this page
+                user.getIdToken()
+                    .then(idToken => {
+                        localStorage.setItem('firebaseIdToken', idToken); // Store/update token
+                         console.log("Token refreshed for profile page use.");
+                         // You could fetch more profile data from your backend here using the token
+                        // fetchApi('/profile-details').then(...) // Example
+                    })
+                    .catch(error => {
+                        console.error("Error refreshing token:", error);
+                        handleLogout(false);
+                    });
+
+            } else {
+                console.log("No user signed in, redirecting to login.");
+                window.location.href = '/login';
+            }
+        });
+
+         // Logout Function (copied from dashboard.html for consistency)
+         function handleLogout(callBackend = true) {
+            const token = localStorage.getItem('firebaseIdToken');
+
+            const backendLogoutPromise = (callBackend && token) ?
+                fetch('/api/logout', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        console.warn('Backend logout failed, proceeding with client-side logout.');
+                    }
+                    return response.json();
+                })
+                .then(data => console.log('Backend logout response:', data))
+                .catch(error => {
+                    console.error('Error during backend logout:', error);
+                })
+                : Promise.resolve();
+
+            backendLogoutPromise.finally(() => {
+                auth.signOut().then(() => {
+                    console.log('User signed out from Firebase');
+                    localStorage.removeItem('firebaseIdToken');
+                    window.location.href = '/login';
+                }).catch((error) => {
+                    console.error('Firebase sign out error:', error);
+                    localStorage.removeItem('firebaseIdToken');
+                    window.location.href = '/login';
+                });
+            });
+        }
+
+        logoutButton.addEventListener('click', () => handleLogout(true));
+
+         // Placeholder for fetchApi function if needed on this page
+        /*
+        async function fetchApi(endpoint, options = {}) {
+            // ... (Implementation similar to dashboard.html) ...
+        }
+        */
+
+    </script>
+</body>
+</html>

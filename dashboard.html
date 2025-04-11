@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <style>
+        body { font-family: sans-serif; margin: 0; padding: 0; background-color: #f8f9fa; }
+        header { background-color: #343a40; color: white; padding: 1rem; display: flex; justify-content: space-between; align-items: center; }
+        header h1 { margin: 0; font-size: 1.5rem; }
+        nav a, button#logoutButton { color: #f8f9fa; text-decoration: none; margin-left: 1rem; background: none; border: none; cursor: pointer; font-size: 1rem; }
+        nav a:hover, button#logoutButton:hover { color: #adb5bd; }
+        main { padding: 2rem; }
+        .welcome { margin-bottom: 2rem; font-size: 1.2rem; }
+        /* Placeholder styling for graphs and analysis */
+        .dashboard-content { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; }
+        .card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            position: relative; /* Needed for blur overlay */
+            overflow: hidden; /* Hide overflowing blur */
+        }
+         .card h3 { margin-top: 0; margin-bottom: 1rem; color: #495057; }
+        .graph-placeholder {
+            background-color: #e9ecef;
+            height: 150px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #6c757d;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+         }
+         .blur-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(5px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            z-index: 10;
+            font-weight: bold;
+            color: #343a40;
+            padding: 1rem;
+         }
+        .analysis-buttons button {
+            display: block;
+            width: 100%;
+            padding: 0.8rem;
+            margin-bottom: 0.5rem;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        .analysis-buttons button:hover { background-color: #0056b3; }
+
+    </style>
+</head>
+<body>
+    <header>
+        <h1>My App Dashboard</h1>
+        <nav>
+            <span id="userIdentifier">Loading...</span>
+            <a href="/api/profile">Profile</a>
+            <button id="logoutButton">Logout</button>
+        </nav>
+    </header>
+    <main>
+        <div class="welcome">Welcome! Get started with your analysis.</div>
+
+        <div class="dashboard-content">
+            <div class="card">
+                <h3>Analysis History</h3>
+                 <div class="graph-placeholder">Dummy Graph Area 1</div>
+                 <div class="blur-overlay">Complete analysis to unlock graphs</div>
+             </div>
+
+            <div class="card">
+                <h3>Your Progress</h3>
+                <div class="graph-placeholder">Dummy Graph Area 2</div>
+                <div class="blur-overlay">Complete analysis to unlock graphs</div>
+            </div>
+
+            <div class="card">
+                 <h3>Start New Analysis</h3>
+                <div class="analysis-buttons">
+                    <button id="startDepressionAnalysis">Depression Analysis</button>
+                    <button id="startAnxietyAnalysis">Anxiety Attack Analysis</button>
+                    <button id="startOCDAnalysis">OCD Analysis</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+
+    <script>
+         // IMPORTANT: Replace with your Firebase project's configuration object
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_AUTH_DOMAIN",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+
+        const logoutButton = document.getElementById('logoutButton');
+        const userIdentifier = document.getElementById('userIdentifier');
+
+        // Authentication Check & Get Token for API calls
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                console.log("User is signed in on dashboard:", user.uid);
+                userIdentifier.textContent = user.email || user.uid; // Display email or UID
+
+                // Ensure we have a fresh token for API calls
+                user.getIdToken()
+                    .then(idToken => {
+                        localStorage.setItem('firebaseIdToken', idToken); // Store/update token
+                        // Now you can safely make authenticated API calls from other functions
+                        console.log("Token refreshed for dashboard use.");
+                    })
+                    .catch(error => {
+                        console.error("Error refreshing token:", error);
+                        // Handle error, maybe force logout
+                        handleLogout(false); // Pass false to avoid backend call if token fails
+                    });
+            } else {
+                console.log("No user signed in, redirecting to login.");
+                // Redirect to login if not authenticated
+                window.location.href = '/login';
+            }
+        });
+
+        // Logout Function
+        function handleLogout(callBackend = true) {
+            const token = localStorage.getItem('firebaseIdToken');
+
+            // Attempt backend logout only if requested and token exists
+            const backendLogoutPromise = (callBackend && token) ?
+                fetch('/api/logout', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        console.warn('Backend logout failed, proceeding with client-side logout.');
+                        // Don't throw error, just warn, as client logout is more critical
+                    }
+                    return response.json();
+                })
+                .then(data => console.log('Backend logout response:', data))
+                .catch(error => {
+                    console.error('Error during backend logout:', error);
+                    // Don't prevent client-side logout
+                })
+                : Promise.resolve(); // If not calling backend or no token, resolve immediately
+
+            // Always perform client-side logout and cleanup
+            backendLogoutPromise.finally(() => {
+                auth.signOut().then(() => {
+                    console.log('User signed out from Firebase');
+                    localStorage.removeItem('firebaseIdToken');
+                    window.location.href = '/login'; // Redirect after logout
+                }).catch((error) => {
+                    console.error('Firebase sign out error:', error);
+                     // Still attempt redirect even if sign out fails
+                    localStorage.removeItem('firebaseIdToken');
+                     window.location.href = '/login';
+                });
+            });
+        }
+
+
+        logoutButton.addEventListener('click', () => handleLogout(true)); // Call backend on click
+
+        // --- Placeholder Analysis Button Handlers ---
+        document.getElementById('startDepressionAnalysis').addEventListener('click', () => {
+            alert('Starting Depression Analysis (Not Implemented Yet)');
+            // Future: window.location.href = '/api/analysis/depression';
+        });
+        document.getElementById('startAnxietyAnalysis').addEventListener('click', () => {
+            alert('Starting Anxiety Attack Analysis (Not Implemented Yet)');
+            // Future: window.location.href = '/api/analysis/anxiety';
+        });
+        document.getElementById('startOCDAnalysis').addEventListener('click', () => {
+            alert('Starting OCD Analysis (Not Implemented Yet)');
+            // Future: window.location.href = '/api/analysis/ocd';
+        });
+
+        // --- General API Call Helper (Example) ---
+        async function fetchApi(endpoint, options = {}) {
+            const token = localStorage.getItem('firebaseIdToken');
+            if (!token) {
+                console.error('No token found for API call');
+                handleLogout(false); // Force logout if token is missing
+                throw new Error('Authentication token not available.');
+            }
+
+            const defaultHeaders = {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            };
+
+            try {
+                const response = await fetch(`/api${endpoint}`, {
+                    ...options,
+                    headers: { ...defaultHeaders, ...options.headers },
+                });
+
+                if (response.status === 401) {
+                    // Unauthorized - token might be expired or invalid
+                    console.warn('API call unauthorized (401), attempting token refresh or logout.');
+                    // Try refreshing the token (might need more robust logic here)
+                    // For now, just log out
+                    handleLogout(false);
+                    throw new Error('Unauthorized');
+                }
+
+                if (!response.ok) {
+                    const errorBody = await response.text(); // Get error details
+                    throw new Error(`API error: ${response.status} ${response.statusText} - ${errorBody}`);
+                }
+
+                // Check if response has content before trying to parse JSON
+                const contentType = response.headers.get("content-type");
+                if (contentType && contentType.indexOf("application/json") !== -1) {
+                    return await response.json();
+                } else {
+                    return await response.text(); // Return as text if not JSON
+                }
+
+            } catch (error) {
+                console.error(`Error fetching ${endpoint}:`, error);
+                throw error; // Re-throw the error for the caller to handle
+            }
+        }
+
+        // Example usage of fetchApi (could be used for fetching dashboard data later)
+        // fetchApi('/dashboard-data')
+        //    .then(data => console.log('Dashboard data:', data))
+        //    .catch(error => console.error('Failed to load dashboard data:', error));
+
+    </script>
+</body>
+</html>

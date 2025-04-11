@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <!-- Add some basic styling -->
+    <style>
+        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: #f4f4f4; }
+        .container { background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center; }
+        input { display: block; width: 90%; padding: 0.8rem; margin: 0.5rem auto; border: 1px solid #ccc; border-radius: 4px; }
+        button { padding: 0.8rem 1.5rem; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 1rem; }
+        button:hover { background-color: #0056b3; }
+        a { display: block; margin-top: 1rem; color: #007bff; text-decoration: none; }
+        .error { color: red; margin-top: 1rem; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Login</h2>
+        <input type="email" id="email" placeholder="Email" required>
+        <input type="password" id="password" placeholder="Password" required>
+        <button id="loginButton">Login</button>
+        <p id="errorMessage" class="error"></p>
+        <a href="/signup">Don't have an account? Sign Up</a>
+    </div>
+
+    <!-- Firebase SDK -->
+    <!-- Replace with your Firebase project's config -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+
+    <script>
+        // IMPORTANT: Replace with your Firebase project's configuration object
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_AUTH_DOMAIN",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+
+        const loginButton = document.getElementById('loginButton');
+        const emailInput = document.getElementById('email');
+        const passwordInput = document.getElementById('password');
+        const errorMessage = document.getElementById('errorMessage');
+
+        loginButton.addEventListener('click', () => {
+            const email = emailInput.value;
+            const password = passwordInput.value;
+            errorMessage.textContent = ''; // Clear previous errors
+
+            if (!email || !password) {
+                errorMessage.textContent = 'Please enter both email and password.';
+                return;
+            }
+
+            auth.signInWithEmailAndPassword(email, password)
+                .then((userCredential) => {
+                    // Signed in
+                    const user = userCredential.user;
+                    console.log('Login successful:', user);
+
+                    // Get ID token
+                    return user.getIdToken();
+                })
+                .then(idToken => {
+                    // Optional: Send token to backend for verification/session setup if needed
+                    // (The middleware handles verification for API requests)
+                    console.log('ID Token:', idToken);
+
+                     // Store token for subsequent API calls
+                    localStorage.setItem('firebaseIdToken', idToken);
+
+                    // Verify token with backend (optional step, useful for immediate feedback)
+                    fetch('/api/verify-token', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${idToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        // You can send additional data if needed
+                        // body: JSON.stringify({ someData: 'value' })
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                             // Even if Firebase login worked, backend verification might fail
+                             throw new Error(`Backend verification failed: ${response.statusText}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        console.log('Backend verification success:', data);
+                        // Redirect to dashboard
+                        window.location.href = '/api/dashboard'; // Use the authenticated API route
+                    })
+                    .catch((error) => {
+                        console.error('Backend verification error:', error);
+                        errorMessage.textContent = `Login succeeded but backend verification failed: ${error.message}`;
+                         // Consider signing the user out locally if backend fails
+                        // auth.signOut();
+                        // localStorage.removeItem('firebaseIdToken');
+                    });
+                })
+                .catch((error) => {
+                    console.error('Login failed:', error);
+                    errorMessage.textContent = `Login failed: ${error.message}`;
+                });
+        });
+
+         // Check if user is already logged in (optional, improves UX)
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                console.log("User already signed in, checking token...");
+                user.getIdToken().then(idToken => {
+                     localStorage.setItem('firebaseIdToken', idToken);
+                     // Optionally verify with backend before redirecting
+                     console.log("Redirecting to dashboard...");
+                     window.location.href = '/api/dashboard';
+                }).catch(error => {
+                    console.error("Error getting token for already signed in user:", error);
+                     // Handle error, maybe sign out
+                    // auth.signOut();
+                    // localStorage.removeItem('firebaseIdToken');
+                })
+
+            } else {
+                console.log("No user signed in.");
+            }
+        });
+
+    </script>
+</body>
+</html>
